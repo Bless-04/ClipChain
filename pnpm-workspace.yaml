@@ -1,0 +1,7 @@
+# Keep ClipFlow independent of workspace files in parent directories.
+packages:
+  - '.'
+
+# Vite uses esbuild; allow its install script for the locked version only.
+allowBuilds:
+  esbuild@0.25.12: true
