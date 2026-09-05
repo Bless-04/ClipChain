@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "codegen": "cargo run --bin generate_bindings --manifest-path src-tauri/Cargo.toml"
   },
   "license": "MIT",
   "dependencies": {
