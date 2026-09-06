@@ -1,25 +1,45 @@
 [package]
-name = "clipflow"
+name = "clipchain"
 version = "0.1.0"
-description = "A Tauri App"
+description = "clipchain ; clipboard transformation desktop app"
 authors = ["you"]
 edition = "2021"
+default-run = "clipchain"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.
-# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
-name = "clipflow_lib"
+# This seems to be only an issue on Windows: https://github.com/rust-lang/cargo/issues/8519
+name = "clipchain_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+# Standalone binary for regenerating TypeScript bindings via tauri-specta.
+# Run with: cargo run --bin generate_bindings
+[[bin]]
+name = "generate_bindings"
+path = "bin/generate_bindings.rs"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri             = { version = "2", features = [] }
 tauri-plugin-opener = "2"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+tauri-specta      = { version = "=2.0.0-rc.20", features = ["derive", "typescript"] }
+specta            = { version = "=2.0.0-rc.20", features = ["derive"] }
+specta-typescript = "=0.0.7"
+serde             = { version = "1", features = ["derive"] }
+serde_json        = "1"
+thiserror         = "1"
+regex             = "1"
+# tokio is brought in transitively by tauri; declare it explicitly for RwLock / Mutex usage.
+tokio             = { version = "1", features = ["rt", "sync", "time", "macros"] }
+sqlx              = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros"] }
+arboard           = { version = "3.6", default-features = false }
+tauri-plugin-autostart = "2"
+tauri-plugin-single-instance = "2"
 
+[dev-dependencies]
+tempfile = "3"
