@@ -5,6 +5,11 @@ pub mod db {
 
     /// SQLite database file name (placed in the Tauri app data directory).
     pub const DB_FILE_NAME: &str = "clipflow.db";
+pub mod app {
+    /// Label of the application's main window.
+    pub const MAIN_WINDOW: &str = "main";
+}
+
 /// Tauri event name constants.
 pub mod events {
     /// Emitted whenever the clipboard content changes after pipeline processing.
