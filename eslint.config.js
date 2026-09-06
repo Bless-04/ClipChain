@@ -10,6 +10,7 @@ export default [
   js.configs.recommended,
   ...ts.configs.recommended,
   ...svelte.configs['flat/recommended'],
+  { files: ['**/*.svelte.ts'], languageOptions: { parser: ts.parser } },
   { languageOptions: { globals: { ...globals.browser, ...globals.node } } },
   {
     files: ['**/*.svelte'],
