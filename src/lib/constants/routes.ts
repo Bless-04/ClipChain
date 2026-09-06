@@ -5,3 +5,6 @@ export const ROUTES = {
   HISTORY: '/history',
   SETTINGS: '/settings',
 } as const;
+
+/** Union type of all valid application route paths. */
+export type AppRoute = (typeof ROUTES)[keyof typeof ROUTES];
