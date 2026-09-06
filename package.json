@@ -1,7 +1,7 @@
 {
-  "name": "clipflow",
+  "name": "clipchain",
   "version": "0.1.0",
-  "description": "",
+  "description": "A local clipboard transformation pipeline",
   "type": "module",
   "packageManager": "pnpm@11.25.0",
   "scripts": {
