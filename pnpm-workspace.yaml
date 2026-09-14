@@ -1,4 +1,4 @@
-# Keep ClipFlow independent of workspace files in parent directories.
+# Keep ClipChain independent of workspace files in parent directories.
 packages:
   - '.'
 
