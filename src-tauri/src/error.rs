@@ -54,10 +54,12 @@ impl From<serde_json::Error> for AppError {
 }
 
 #[cfg(test)]
+// Test assertions intentionally fail fast; production code still denies panicking helpers.
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
 
-    /// Verify that AppError serializes to the expected discriminated-union shape.
+    /// Verify that `AppError` serializes to the expected discriminated-union shape.
     #[test]
     fn app_error_serializes_correctly() {
         let err = AppError::NotFound("rule 99".to_string());

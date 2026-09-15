@@ -8,6 +8,36 @@ use crate::{
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[tokio::test]
+async fn database_created_with_original_lf_migration_survives_windows_checkout() -> TestResult {
+    let directory = tempfile::tempdir()?;
+    let path = directory.path().join("existing.db");
+    let migrations = directory.path().join("original-migrations");
+    std::fs::create_dir(&migrations)?;
+    // Model the original release, even if a Windows checkout converts the source to CRLF.
+    std::fs::write(
+        migrations.join("0001_initial.sql"),
+        include_str!("migrations/0001_initial.sql").replace("\r\n", "\n"),
+    )?;
+    let options = sqlx::sqlite::SqliteConnectOptions::new()
+        .filename(&path)
+        .create_if_missing(true);
+    let original = sqlx::SqlitePool::connect_with(options).await?;
+    sqlx::migrate::Migrator::new(migrations)
+        .await?
+        .run(&original)
+        .await?;
+    let saved = rules::save(&original, draft("Keep existing rule")).await?;
+    history::insert(&original, " before ", "before").await?;
+    original.close().await;
+
+    let reopened = open(&path).await?;
+    assert_eq!(rules::get_all(&reopened).await?[0].id(), saved.id());
+    assert_eq!(history::get_all(&reopened).await?.len(), 1);
+    reopened.close().await;
+    Ok(())
+}
+
+#[tokio::test]
 async fn failed_rule_read_retries_pending_clipboard_text_after_repair() -> TestResult {
     use crate::{
         clipboard::{ClipboardAccess, Monitor},

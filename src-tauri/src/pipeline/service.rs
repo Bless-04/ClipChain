@@ -29,6 +29,8 @@ pub fn run_pipeline(rules: &[Rule], input: &str) -> Result<String, AppError> {
 }
 
 #[cfg(test)]
+// Test assertions intentionally fail fast; production code still denies panicking helpers.
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
     use crate::models::{RegexRule, ReplaceRule, Rule, TrimRule};
