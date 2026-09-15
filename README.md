@@ -1,6 +1,6 @@
-# Tauri + SvelteKit + TypeScript
+# ClipChain
 
-This template should help get you started developing with Tauri, SvelteKit and TypeScript in Vite.
+A local desktop clipboard transformation pipeline built with Tauri, SvelteKit, and Rust.
 
 ## Recommended IDE Setup
 
