@@ -1,0 +1,39 @@
+name: Quick checks
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quick-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quick:
+    name: Lightweight push checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - uses: pnpm/action-setup@v6
+        with:
+          standalone: true
+          cache: true
+      - name: Ensure Rust formatter is installed
+        run: rustup component add rustfmt
+      - name: Install locked frontend dependencies
+        run: pnpm install --frozen-lockfile
+      # Uses checked-in bindings; no Tauri compilation or OS packages needed.
+      - name: Run lightweight checks
+        run: pnpm ci:quick
+      - name: Check whitespace
+        run: git diff --check
