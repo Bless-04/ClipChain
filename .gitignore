@@ -41,4 +41,3 @@ dist-ssr
 .env
 .env.*
 !.env.example
-/src/lib/generated
