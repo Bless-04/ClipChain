@@ -128,3 +128,11 @@ See `HANDOFF_PROMPT.md` for fresh test results and remaining native acceptance
 checks. Regular test suites use temporary databases and simulated clipboard
 devices. Live native acceptance uses a disposable app identity and synthetic text,
 with the original clipboard restored afterward.
+
+Run `pnpm test:all` for both frontend and Rust regression suites (`pnpm test`
+and `pnpm test:rust` run them separately). `pnpm ci:quick` runs the lightweight
+push checks: frontend tests, types, lint, and Rust formatting. Pull requests and
+manual dispatch run the full Windows, macOS, and Linux matrix, including both
+test suites, native builds, and real clipboard smoke tests on disposable hosted
+runners. See [TESTING.md](TESTING.md) for the coverage map, CI triggers, native
+acceptance boundaries, and expectations for new features.
