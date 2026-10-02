@@ -191,3 +191,6 @@ pub fn start(app: tauri::AppHandle, state: Arc<AppState>) -> Result<(), AppError
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod native_tests;
