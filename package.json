@@ -13,6 +13,10 @@
     "tauri": "tauri",
     "codegen": "cargo run --bin generate_bindings --manifest-path src-tauri/Cargo.toml",
     "test": "vitest run",
+    "test:rust": "cargo test --locked --manifest-path src-tauri/Cargo.toml",
+    "test:all": "pnpm test && pnpm test:rust",
+    "test:native": "cargo test --locked --manifest-path src-tauri/Cargo.toml --lib clipboard::native_tests::native_clipboard_pipeline_smoke -- --ignored --exact --test-threads=1",
+    "ci:quick": "pnpm check && pnpm lint && pnpm test && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check",
     "test:watch": "vitest",
     "lint": "eslint ."
   },
