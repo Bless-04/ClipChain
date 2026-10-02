@@ -82,4 +82,19 @@ mod tests {
         let json = serde_json::to_value(&err).expect("serialization must succeed in tests");
         assert_eq!(json["kind"], "database");
     }
+
+    #[test]
+    fn clipboard_and_internal_errors_round_trip_with_their_typed_messages(
+    ) -> Result<(), serde_json::Error> {
+        for (error, kind) in [
+            (AppError::Clipboard("Clipboard locked".into()), "clipboard"),
+            (AppError::Internal("Startup denied".into()), "internal"),
+        ] {
+            let json = serde_json::to_value(&error)?;
+            assert_eq!(json["kind"], kind);
+            let decoded: AppError = serde_json::from_value(json)?;
+            assert_eq!(decoded.to_string(), error.to_string());
+        }
+        Ok(())
+    }
 }
