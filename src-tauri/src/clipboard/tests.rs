@@ -2,7 +2,7 @@ use super::{ClipboardAccess, Monitor};
 use crate::{
     db,
     error::AppError,
-    models::{AppSettings, ReplaceRule, Rule},
+    models::{AppSettings, RegexRule, ReplaceRule, Rule, TrimRule},
     state::AppState,
 };
 
@@ -227,6 +227,134 @@ async fn pause_and_resume_between_polls_still_reset_the_baseline() -> TestResult
     clipboard.text = Some("new copy".into());
     monitor.tick(&mut clipboard, &state).await?;
     assert_eq!(clipboard.writes, vec!["new copy!"]);
+    state.pool.close().await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn stored_chain_edits_toggles_and_reordering_apply_on_the_next_copy() -> TestResult {
+    let directory = tempfile::tempdir()?;
+    let pool = db::open(&directory.path().join("test.db")).await?;
+    let trim = db::rules::save(
+        &pool,
+        Rule::Trim(TrimRule {
+            id: 0,
+            order: 0,
+            name: "Trim".into(),
+            is_active: true,
+            trim_start: true,
+            trim_end: true,
+        }),
+    )
+    .await?;
+    let replacement = db::rules::save(
+        &pool,
+        Rule::Replace(ReplaceRule {
+            id: 0,
+            order: 0,
+            name: "Replace".into(),
+            is_active: true,
+            target: "copy".into(),
+            replacement: "item42".into(),
+            match_case: true,
+        }),
+    )
+    .await?;
+    let mut regex = db::rules::save(
+        &pool,
+        Rule::Regex(RegexRule {
+            id: 0,
+            order: 0,
+            name: "Regex".into(),
+            is_active: true,
+            pattern: "^item(\\d+)$".into(),
+            replacement: "number $1".into(),
+        }),
+    )
+    .await?;
+    let state = AppState::new(pool);
+    let mut monitor = Monitor::default();
+    let mut clipboard = FakeClipboard::default();
+    monitor.tick(&mut clipboard, &state).await?;
+    clipboard.text = Some("  copy  ".into());
+    let tick = monitor.tick(&mut clipboard, &state).await?;
+    let entry = tick
+        .change
+        .and_then(|change| change.entry)
+        .ok_or("Expected history")?;
+    assert_eq!(clipboard.writes, vec!["number 42"]);
+    assert_eq!(entry.original_text, "  copy  ");
+    assert_eq!(entry.transformed_text, "number 42");
+
+    db::rules::reorder(&state.pool, &[regex.id(), replacement.id(), trim.id()]).await?;
+    clipboard.text = Some(" copy ".into());
+    monitor.tick(&mut clipboard, &state).await?;
+    assert_eq!(clipboard.text.as_deref(), Some("item42"));
+
+    if let Rule::Regex(rule) = &mut regex {
+        rule.is_active = false;
+        rule.replacement = "edited $1".into();
+    }
+    db::rules::save(&state.pool, regex.clone()).await?;
+    db::rules::reorder(&state.pool, &[trim.id(), replacement.id(), regex.id()]).await?;
+    clipboard.text = Some("copy".into());
+    monitor.tick(&mut clipboard, &state).await?;
+    assert_eq!(clipboard.text.as_deref(), Some("item42"));
+    if let Rule::Regex(rule) = &mut regex {
+        rule.is_active = true;
+    }
+    db::rules::save(&state.pool, regex).await?;
+    clipboard.text = Some(" copy  ".into());
+    monitor.tick(&mut clipboard, &state).await?;
+    assert_eq!(clipboard.text.as_deref(), Some("edited 42"));
+    assert_eq!(db::history::get_all(&state.pool).await?.len(), 4);
+    state.pool.close().await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn oversized_input_is_skipped_once_and_the_next_copy_recovers() -> TestResult {
+    let directory = tempfile::tempdir()?;
+    let state = state(&directory).await?;
+    let mut monitor = Monitor::default();
+    let mut clipboard = FakeClipboard::default();
+    monitor.tick(&mut clipboard, &state).await?;
+    clipboard.text = Some("é".repeat(crate::constants::clipboard::MAX_TEXT_BYTES / 2 + 1));
+    assert!(matches!(
+        monitor.tick(&mut clipboard, &state).await,
+        Err(AppError::Validation(_))
+    ));
+    assert!(monitor.tick(&mut clipboard, &state).await?.change.is_none());
+    assert!(clipboard.writes.is_empty());
+    assert!(db::history::get_all(&state.pool).await?.is_empty());
+    clipboard.text = Some("copy".into());
+    assert!(monitor
+        .tick(&mut clipboard, &state)
+        .await?
+        .status
+        .last_error
+        .is_none());
+    assert_eq!(clipboard.writes, vec!["copy!"]);
+    state.pool.close().await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn initial_read_failure_retries_baseline_before_processing_new_text() -> TestResult {
+    let directory = tempfile::tempdir()?;
+    let state = state(&directory).await?;
+    let mut monitor = Monitor::default();
+    let mut clipboard = FakeClipboard {
+        text: Some("existing copy".into()),
+        fail_on_read: Some(1),
+        ..Default::default()
+    };
+    assert!(monitor.tick(&mut clipboard, &state).await.is_err());
+    monitor.tick(&mut clipboard, &state).await?;
+    assert!(clipboard.writes.is_empty());
+    clipboard.text = Some("fresh copy".into());
+    monitor.tick(&mut clipboard, &state).await?;
+    assert_eq!(clipboard.writes, vec!["fresh copy!"]);
     state.pool.close().await;
     Ok(())
 }

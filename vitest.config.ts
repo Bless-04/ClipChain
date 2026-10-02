@@ -6,7 +6,11 @@ import { svelteTesting } from '@testing-library/svelte/vite';
 export default defineConfig({
   plugins: [svelte(), svelteTesting()],
   resolve: {
-    alias: { $lib: fileURLToPath(new URL('./src/lib', import.meta.url)) },
+    alias: {
+      $lib: fileURLToPath(new URL('./src/lib', import.meta.url)),
+      '$app/paths': fileURLToPath(new URL('./src/test/kit-mock.ts', import.meta.url)),
+      '$app/state': fileURLToPath(new URL('./src/test/kit-mock.ts', import.meta.url)),
+    },
     conditions: ['browser'],
   },
   test: {

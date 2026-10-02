@@ -52,24 +52,35 @@ pub async fn save_settings(
     let previous = manager
         .is_enabled()
         .map_err(|error| AppError::Internal(error.to_string()))?;
-    if previous != settings.launch_at_startup {
-        if settings.launch_at_startup {
+    persist_with_startup(&state, &settings, previous, |enabled| {
+        if enabled {
             manager.enable()
         } else {
             manager.disable()
         }
-        .map_err(|error| {
+        .map_err(|error| error.to_string())
+    })
+    .await?;
+    let _ = SettingsUpdated.emit(&app);
+    Ok(settings)
+}
+
+// Keep the OS operation injectable so compensation can be tested without
+// changing the user's startup registration. The command holds the mutation gate.
+async fn persist_with_startup(
+    state: &AppState,
+    settings: &AppSettings,
+    previous: bool,
+    set_startup: impl Fn(bool) -> Result<(), String>,
+) -> Result<(), AppError> {
+    if previous != settings.launch_at_startup {
+        set_startup(settings.launch_at_startup).map_err(|error| {
             AppError::Internal(format!("Could not change startup registration: {error}"))
         })?;
     }
-    if let Err(error) = state.persist_settings(&settings).await {
+    if let Err(error) = state.persist_settings(settings).await {
         if previous != settings.launch_at_startup {
-            let rollback = if previous {
-                manager.enable()
-            } else {
-                manager.disable()
-            };
-            if let Err(rollback_error) = rollback {
+            if let Err(rollback_error) = set_startup(previous) {
                 return Err(AppError::Internal(format!(
                     "{error}; startup rollback also failed: {rollback_error}"
                 )));
@@ -77,8 +88,7 @@ pub async fn save_settings(
         }
         return Err(error);
     }
-    let _ = SettingsUpdated.emit(&app);
-    Ok(settings)
+    Ok(())
 }
 
 /// Returns the native worker's current availability and last operational error.
@@ -91,3 +101,6 @@ pub async fn get_monitor_status(
 ) -> Result<MonitorStatus, AppError> {
     Ok(state.monitor.read().await.clone())
 }
+
+#[cfg(test)]
+mod tests;

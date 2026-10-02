@@ -90,3 +90,54 @@ pub async fn preview_rule(rule: Rule, input: String) -> Result<String, AppError>
     pipeline::validation::validate_rule(&rule)?;
     pipeline::transformer::apply_rule(&rule, &input)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::preview_rule;
+    use crate::{
+        constants::clipboard::MAX_TEXT_BYTES,
+        error::AppError,
+        models::{Rule, TrimRule},
+    };
+
+    fn draft() -> Rule {
+        Rule::Trim(TrimRule {
+            id: 0,
+            order: 0,
+            name: "Preview".into(),
+            is_active: false,
+            trim_start: true,
+            trim_end: true,
+        })
+    }
+
+    #[tokio::test]
+    async fn preview_transforms_disabled_unsaved_rules() -> Result<(), AppError> {
+        assert_eq!(
+            preview_rule(draft(), "  😀 value\n".into()).await?,
+            "😀 value"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn preview_rejects_invalid_drafts_before_transforming() {
+        let mut rule = draft();
+        rule.set_identity(-1, 0);
+        assert!(matches!(
+            preview_rule(rule, " value ".into()).await,
+            Err(AppError::Validation(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn preview_enforces_input_byte_boundary() -> Result<(), AppError> {
+        let input = "é".repeat(MAX_TEXT_BYTES / 2);
+        assert_eq!(preview_rule(draft(), input.clone()).await?, input);
+        assert!(matches!(
+            preview_rule(draft(), input + "é").await,
+            Err(AppError::Validation(_))
+        ));
+        Ok(())
+    }
+}

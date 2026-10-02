@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { trimRule, regexRule, historyEntry, settings, deferred } from '../../test/fixtures';
-import { RULE_REGEX, RULE_REPLACE, type Rule, type Result, type AppError } from '$lib/generated/bindings';
+import { RULE_REGEX, RULE_REPLACE, MAX_TEXT_BYTES, type Rule, type Result, type AppError } from '$lib/generated/bindings';
 import { SettingsState } from '$lib/state/settings.svelte';
 import { HistoryState } from '$lib/state/history.svelte';
 import RuleEditor from './rules/RuleEditor.svelte';
@@ -12,6 +12,37 @@ import HistoryPanel from './HistoryPanel.svelte';
 import SettingsPanel from './SettingsPanel.svelte';
 
 describe('rule editing', () => {
+  it('saves literal replacement options without interpreting capture syntax', async () => {
+    const onsave = vi.fn<(rule: Rule) => Promise<void>>().mockResolvedValue();
+    const initial: Rule = { type: RULE_REPLACE, data: { id: 4, order: 2, name: 'Replace', isActive: true, target: 'old', replacement: '', matchCase: true } };
+    render(RuleEditor, { initial, onsave, oncancel: vi.fn() });
+    expect(screen.queryByLabelText('Rule type')).not.toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.clear(screen.getByLabelText('Text to replace'));
+    await fireEvent.input(screen.getByLabelText('Text to replace'), { target: { value: 'a\nb' } });
+    await user.type(screen.getByLabelText('Replacement'), '$1');
+    await user.click(screen.getByLabelText('Match case'));
+    await user.click(screen.getByRole('button', { name: 'Save rule' }));
+    expect(onsave).toHaveBeenCalledWith({ type: RULE_REPLACE, data: { ...initial.data, target: 'a\nb', replacement: '$1', matchCase: false } });
+    expect(initial.data.target).toBe('old');
+  });
+  it('keeps a new rule name and enabled choice when switching editor types', async () => {
+    render(RuleEditor, { initial: null, onsave: vi.fn(), oncancel: vi.fn() });
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('Rule name'), 'Draft');
+    await user.click(screen.getByLabelText('Enable in pipeline'));
+    await user.selectOptions(screen.getByLabelText('Rule type'), RULE_REGEX);
+    expect(screen.getByLabelText('Rule name')).toHaveValue('Draft');
+    expect(screen.getByLabelText('Enable in pipeline')).not.toBeChecked();
+    expect(screen.getByLabelText('Rust regex pattern')).toHaveValue('');
+  });
+  it('rejects oversized multibyte preview input before calling native code', async () => {
+    render(RuleEditor, { initial: trimRule(), onsave: vi.fn(), oncancel: vi.fn() });
+    await fireEvent.input(screen.getByLabelText('Sample text'), { target: { value: 'é'.repeat(MAX_TEXT_BYTES / 2 + 1) } });
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Preview with Rust' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Preview input must be at most');
+    expect(mockCommands.previewRule).not.toHaveBeenCalled();
+  });
   it('creates an enabled trim rule and independently edits its edges', async () => {
     const onsave = vi.fn<(rule: Rule) => Promise<void>>().mockResolvedValue();
     render(RuleEditor, { initial: null, onsave, oncancel: vi.fn() });
@@ -95,6 +126,14 @@ describe('rule editing', () => {
 });
 
 describe('pipeline controls', () => {
+  it('disables every mutation while the pipeline is busy', async () => {
+    const callbacks = { onedit: vi.fn(), ondelete: vi.fn(), ontoggle: vi.fn(), onreorder: vi.fn() };
+    render(RuleList, { rules: [trimRule(1), trimRule(2)], busy: true, ...callbacks });
+    for (const control of [...screen.getAllByRole('button'), ...screen.getAllByRole('switch')]) {
+      expect(control).toBeDisabled(); await userEvent.setup().click(control);
+    }
+    Object.values(callbacks).forEach((callback) => expect(callback).not.toHaveBeenCalled());
+  });
   it('provides boundary-safe reordering, toggle, edit and explicit delete callbacks', async () => {
     const rules = [trimRule(1, 'First'), trimRule(2, 'Second')];
     const callbacks = { onedit: vi.fn(), ondelete: vi.fn(), ontoggle: vi.fn(), onreorder: vi.fn() };

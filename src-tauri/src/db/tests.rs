@@ -2,7 +2,7 @@ use super::{history, open, rules, settings};
 use crate::{
     constants,
     error::AppError,
-    models::{AppSettings, RegexRule, Rule, TrimRule},
+    models::{AppSettings, RegexRule, ReplaceRule, Rule, TrimRule},
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -200,6 +200,12 @@ async fn history_is_bounded_newest_first_and_clear_is_isolated() -> TestResult {
     let directory = tempfile::tempdir()?;
     let pool = open(&directory.path().join("test.db")).await?;
     rules::save(&pool, draft("Keep rule")).await?;
+    let configuration = AppSettings {
+        is_active: false,
+        launch_at_startup: true,
+        record_history: false,
+    };
+    settings::save(&pool, &configuration).await?;
     for index in 0..=constants::db::MAX_HISTORY_ENTRIES {
         history::insert(&pool, &index.to_string(), "after").await?;
     }
@@ -216,6 +222,7 @@ async fn history_is_bounded_newest_first_and_clear_is_isolated() -> TestResult {
     history::clear(&pool).await?;
     assert!(history::get_all(&pool).await?.is_empty());
     assert_eq!(rules::get_all(&pool).await?.len(), 1);
+    assert_eq!(settings::get(&pool).await?, configuration);
     pool.close().await;
     Ok(())
 }
@@ -236,5 +243,114 @@ async fn pipeline_size_limit_is_enforced() -> TestResult {
         constants::validation::MAX_RULES
     );
     pool.close().await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn edited_rule_variants_and_pipeline_order_survive_reopen() -> TestResult {
+    let directory = tempfile::tempdir()?;
+    let path = directory.path().join("test.db");
+    let pool = open(&path).await?;
+    let trim = rules::save(&pool, draft("Trim")).await?;
+    let replacement = rules::save(
+        &pool,
+        Rule::Replace(ReplaceRule {
+            id: 0,
+            order: 0,
+            name: "Literal".into(),
+            is_active: false,
+            target: "é\nvalue".into(),
+            replacement: "$1".into(),
+            match_case: false,
+        }),
+    )
+    .await?;
+    let mut regex = rules::save(
+        &pool,
+        Rule::Regex(RegexRule {
+            id: 0,
+            order: 0,
+            name: "Regex".into(),
+            is_active: true,
+            pattern: "(?m)^(?<value>.+)$".into(),
+            replacement: "${value}!".into(),
+        }),
+    )
+    .await?;
+    if let Rule::Regex(rule) = &mut regex {
+        rule.replacement = "${value} edited".into();
+        rule.is_active = false;
+    }
+    let regex_id = regex.id();
+    rules::save(&pool, regex).await?;
+    let expected = rules::reorder(&pool, &[replacement.id(), trim.id(), regex_id]).await?;
+    pool.close().await;
+    let reopened = open(&path).await?;
+    assert_eq!(
+        serde_json::to_value(rules::get_all(&reopened).await?)?,
+        serde_json::to_value(expected)?
+    );
+    reopened.close().await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn failed_history_insert_reports_health_without_reprocessing_successful_write() -> TestResult
+{
+    use crate::{
+        clipboard::{ClipboardAccess, Monitor},
+        state::AppState,
+    };
+    struct TextClipboard {
+        text: String,
+        writes: usize,
+    }
+    impl ClipboardAccess for TextClipboard {
+        fn read(&mut self) -> Result<Option<String>, AppError> {
+            Ok(Some(self.text.clone()))
+        }
+        fn write(&mut self, text: &str) -> Result<(), AppError> {
+            self.text = text.into();
+            self.writes += 1;
+            Ok(())
+        }
+    }
+    let directory = tempfile::tempdir()?;
+    let pool = open(&directory.path().join("test.db")).await?;
+    rules::save(&pool, draft("Trim")).await?;
+    sqlx::query("CREATE TRIGGER reject_history BEFORE INSERT ON history BEGIN SELECT RAISE(FAIL, 'history unavailable'); END")
+        .execute(&pool).await?;
+    let state = AppState::new(pool);
+    let mut clipboard = TextClipboard {
+        text: "baseline".into(),
+        writes: 0,
+    };
+    let mut monitor = Monitor::default();
+    monitor.tick(&mut clipboard, &state).await?;
+    clipboard.text = " pending copy ".into();
+    let tick = monitor.tick(&mut clipboard, &state).await?;
+    assert_eq!(clipboard.text, "pending copy");
+    assert!(tick.status.is_running);
+    assert!(tick
+        .status
+        .last_error
+        .is_some_and(|error| error.contains("history unavailable")));
+    assert!(tick.change.is_some_and(|change| change.entry.is_none()));
+    assert!(history::get_all(&state.pool).await?.is_empty());
+    sqlx::query("DROP TRIGGER reject_history")
+        .execute(&state.pool)
+        .await?;
+    let tick = monitor.tick(&mut clipboard, &state).await?;
+    assert!(tick.status.last_error.is_none());
+    assert!(tick.change.is_none());
+    assert_eq!(clipboard.writes, 1);
+    clipboard.text = " next copy ".into();
+    assert!(monitor
+        .tick(&mut clipboard, &state)
+        .await?
+        .change
+        .is_some_and(|change| change.entry.is_some()));
+    assert_eq!(history::get_all(&state.pool).await?.len(), 1);
+    state.pool.close().await;
     Ok(())
 }
