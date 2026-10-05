@@ -1,15 +1,24 @@
 {
-  "name": "clipflow",
+  "name": "clipchain",
   "version": "0.1.0",
-  "description": "",
+  "description": "A local clipboard transformation pipeline",
   "type": "module",
+  "packageManager": "pnpm@11.25.0",
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "codegen": "cargo run --bin generate_bindings --manifest-path src-tauri/Cargo.toml",
+    "test": "vitest run",
+    "test:rust": "cargo test --locked --manifest-path src-tauri/Cargo.toml",
+    "test:all": "pnpm test && pnpm test:rust",
+    "test:native": "cargo test --locked --manifest-path src-tauri/Cargo.toml --lib clipboard::native_tests::native_clipboard_pipeline_smoke -- --ignored --exact --test-threads=1",
+    "ci:quick": "pnpm check && pnpm lint && pnpm test && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check",
+    "test:watch": "vitest",
+    "lint": "eslint ."
   },
   "license": "MIT",
   "dependencies": {
@@ -17,13 +26,24 @@
     "@tauri-apps/plugin-opener": "^2"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@sveltejs/adapter-static": "^3.0.6",
     "@sveltejs/kit": "^2.9.0",
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
+    "@tauri-apps/cli": "^2",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/svelte": "^5.4.2",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/node": "^24.13.3",
+    "eslint": "^10.10.0",
+    "eslint-plugin-svelte": "^3.23.0",
+    "globals": "^17.12.0",
+    "jsdom": "^26.1.0",
     "svelte": "^5.0.0",
     "svelte-check": "^4.0.0",
     "typescript": "~5.6.2",
+    "typescript-eslint": "^8.69.0",
     "vite": "^6.0.3",
-    "@tauri-apps/cli": "^2"
+    "vitest": "^3.2.7"
   }
 }

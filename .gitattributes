@@ -1,0 +1,2 @@
+# SQLx checksums the exact migration bytes. Keep Windows checkouts identical to Git.
+src-tauri/src/db/migrations/*.sql text eol=lf
