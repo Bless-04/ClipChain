@@ -2,9 +2,10 @@
 name = "clipchain"
 version = "0.1.0"
 description = "clipchain ; clipboard transformation desktop app"
-authors = ["you"]
-edition = "2021"
+authors = ["Blessing"]
+edition = "2024"
 default-run = "clipchain"
+rust-version = "1.99.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -21,6 +22,10 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 name = "generate_bindings"
 path = "bin/generate_bindings.rs"
 
+[[bin]]
+name = "clipchain-cli"
+path = "bin/cli.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -35,11 +40,13 @@ serde_json        = "1"
 thiserror         = "1"
 regex             = "1"
 # tokio is brought in transitively by tauri; declare it explicitly for RwLock / Mutex usage.
-tokio             = { version = "1", features = ["rt", "sync", "time", "macros"] }
+tokio             = { version = "1", features = ["rt", "sync", "time", "macros", "signal"] }
 sqlx              = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros"] }
 arboard           = { version = "3.6", default-features = false }
 tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"
+clap = { version = "4.6", features = ["derive"] }
+dirs = "6"
 
 [dev-dependencies]
 tempfile = "3"
