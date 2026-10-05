@@ -159,6 +159,11 @@ ClipChain/
 
 ## Workflow
 
+The headless `clipchain-cli` executable shares the desktop pipeline and database.
+It supports piped/argument transforms, draft previews, rule management, one-shot
+clipboard processing, a daemon, history, settings, and worker status. See
+[CLI.md](CLI.md) for build commands, examples, and clipboard ownership behavior.
+
 - **Overview:** actual worker health, pause/resume, active rule count, and recent
   retained transformations. History counts are not lifetime transformation totals.
 - **Rules:** create, edit, enable/disable, delete with confirmation, and reorder
@@ -176,7 +181,8 @@ ClipChain/
 
 ## Storage and privacy
 
-Rust resolves the database through Tauri's `app_data_dir()`. The application
+Rust resolves the database through a shared `dirs::data_dir()` helper matching
+Tauri's `app_data_dir()`. The application
 identifier is `com.blessing.clipchain` and the database filename is
 `clipchain.db`. On Windows the normal data location is:
 
