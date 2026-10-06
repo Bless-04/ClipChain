@@ -132,7 +132,8 @@ ClipChain/
 │   │   ├── main.rs             # Application entry point with Windows subsystem configuration
 │   │   └── state.rs            # AppState holding the SQLite connection pool and shutdown flag
 │   ├── tests/                  # Integration test suites
-│   │   └── cli.rs              # Headless CLI end-to-end integration tests
+│   │   ├── cli.rs              # Headless CLI end-to-end integration tests
+│   │   └── cli_usage.rs        # Public CLI syntax and offline extraction regressions
 │   ├── Cargo.lock              # Pinned Rust dependencies lockfile
 │   ├── Cargo.toml              # Rust crate manifest, dependencies, and binary definitions
 │   └── tauri.conf.json         # Tauri v2 app manifest, window dimensions, bundle configuration
@@ -161,10 +162,13 @@ ClipChain/
 
 ## Workflow
 
-The headless `clipchain-cli` executable shares the desktop pipeline and database.
-It supports piped/argument transforms, draft previews, rule management, one-shot
-clipboard processing, a daemon, history, settings, and worker status. See
-[CLI.md](CLI.md) for build commands, examples, and clipboard ownership behavior.
+The headless `clipchain-cli` executable reads saved rules, history, settings, and
+status directly from SQLite while the desktop app is closed. Use `rules list
+--json`, `history list --json`, `settings get --json`, or `status --json` to extract
+that information without launching the app. It also supports piped/argument
+transforms, draft previews, rule management, one-shot clipboard processing, and
+a daemon. See [CLI.md](CLI.md) for build commands, extraction examples, and
+clipboard ownership behavior.
 
 - **Overview:** actual worker health, pause/resume, active rule count, and recent
   retained transformations. History counts are not lifetime transformation totals.
