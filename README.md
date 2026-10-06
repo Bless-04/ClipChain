@@ -131,14 +131,16 @@ ClipChain/
 │   │   ├── lib.rs              # Library root, ipc_builder() registry, plugin setup, lifecycle
 │   │   ├── main.rs             # Application entry point with Windows subsystem configuration
 │   │   └── state.rs            # AppState holding the SQLite connection pool and shutdown flag
+│   ├── tests/                  # Integration test suites
+│   │   └── cli.rs              # Headless CLI end-to-end integration tests
 │   ├── Cargo.lock              # Pinned Rust dependencies lockfile
 │   ├── Cargo.toml              # Rust crate manifest, dependencies, and binary definitions
 │   └── tauri.conf.json         # Tauri v2 app manifest, window dimensions, bundle configuration
 ├── static/                     # Static assets (favicons, app logos)
 ├── .gitattributes              # Line-ending enforcement (LF for SQL migrations)
 ├── .gitignore                  # Git ignore patterns
+├── CLI.md                      # Headless CLI usage, command reference, and daemon guide
 ├── eslint.config.js            # Flat ESLint configuration
-├── HANDOFF_PROMPT.md           # Implementation status and native acceptance checklist
 ├── package.json                # Frontend package scripts and dependencies
 ├── pnpm-lock.yaml              # Locked frontend dependency graph
 ├── pnpm-workspace.yaml         # Isolated pnpm workspace definition
@@ -155,7 +157,7 @@ ClipChain/
 - **Frontend (`src/`)**: Built on SvelteKit with Svelte 5 runes (`$state`, `$derived`, `$props`). Reactive application singletons in `src/lib/state/` manage local caches, optimistic mutations, and window event listeners. IPC requests flow through typed service wrappers in `src/lib/services/` using auto-generated `tauri-specta` bindings (`src/lib/generated/bindings.ts`), with mock implementations providing graceful fallbacks during browser-only development.
 - **Backend Core (`src-tauri/`)**: Written in Rust and hosted within Tauri v2. Transformation logic is modularized in `src-tauri/src/pipeline/` (`Trim`, literal `Replace`, and Rust `Regex`), with bounded execution (up to 100 rules, 16 KiB per field, and 1 MiB payload limits). The background clipboard monitor polls every 250 ms with write suppression, lease-based process ownership, and best-effort pre-write re-reading.
 - **Persistence (`src-tauri/src/db/`)**: Local SQLite running in WAL mode with embedded SQLx migrations. Manages persistent rule ordering, app settings, pause generation coordination, and up to 500 history records with FIFO pruning.
-- **IPC, CLI & Code Generation (`src-tauri/bin/`)**: IPC commands, events, and constants are registered in a single shared `ipc_builder()` in `src-tauri/src/lib.rs`. Running `pnpm codegen` invokes `generate_bindings.rs` to produce type-safe TypeScript interfaces and bindings committed under `src/lib/generated/bindings.ts`. The headless `clipchain-cli` binary (`bin/cli.rs`) provides pipeline transformations, one-shot clipboard processing, and headless daemon operation sharing the same Rust core.
+- **IPC, CLI & Code Generation (`src-tauri/bin/`)**: IPC commands, events, and constants are registered in a single shared `ipc_builder()` in `src-tauri/src/lib.rs`. Running `pnpm codegen` invokes `generate_bindings.rs` to produce type-safe TypeScript interfaces and bindings committed under `src/lib/generated/bindings.ts`. The headless `clipchain-cli` binary (`bin/cli.rs`) provides pipeline transformations, one-shot clipboard processing, and headless daemon operation sharing the same Rust core, verified by end-to-end integration tests in `src-tauri/tests/cli.rs`.
 
 ## Workflow
 
@@ -251,10 +253,10 @@ This builds a native debug executable in `src-tauri/target/debug/clipchain.exe`
 without creating an installer. Frontend bundles, native executables, and release
 packaging are separate verification steps.
 
-See `HANDOFF_PROMPT.md` for fresh test results and remaining native acceptance
-checks. Regular test suites use temporary databases and simulated clipboard
-devices. Live native acceptance uses a disposable app identity and synthetic text,
-with the original clipboard restored afterward.
+See [TESTING.md](TESTING.md) for fresh test results, the coverage map, and
+remaining native acceptance checks. Regular test suites use temporary databases
+and simulated clipboard devices. Live native acceptance uses a disposable app
+identity and synthetic text, with the original clipboard restored afterward.
 
 Run `pnpm test:all` for both frontend and Rust regression suites (`pnpm test`
 and `pnpm test:rust` run them separately). `pnpm ci:quick` runs the lightweight
