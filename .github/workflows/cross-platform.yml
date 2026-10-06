@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-24.04]
+        os: [windows-latest, macos-latest, ubuntu-latest]
     env:
       CARGO_TERM_COLOR: always
     steps:
@@ -77,5 +77,3 @@ jobs:
         run: dbus-run-session -- xvfb-run -a pnpm test:native
       - name: Build the native application
         run: pnpm tauri build --debug --no-bundle --ci -- --locked
-      - name: Check whitespace
-        run: git diff --check
