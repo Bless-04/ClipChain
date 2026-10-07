@@ -6,7 +6,7 @@
 use crate::{
     db,
     error::AppError,
-    models::{events::RulesUpdated, Rule},
+    models::{Rule, events::RulesUpdated},
     pipeline,
     state::AppState,
 };
@@ -115,7 +115,8 @@ mod tests {
     async fn preview_transforms_disabled_unsaved_rules() -> Result<(), AppError> {
         assert_eq!(
             preview_rule(draft(), "  😀 value\n".into()).await?,
-            "😀 value"
+            "😀 value",
+            "Preview must evaluate an unsaved disabled draft and preserve the Unicode text it keeps."
         );
         Ok(())
     }
@@ -124,20 +125,30 @@ mod tests {
     async fn preview_rejects_invalid_drafts_before_transforming() {
         let mut rule = draft();
         rule.set_identity(-1, 0);
-        assert!(matches!(
-            preview_rule(rule, " value ".into()).await,
-            Err(AppError::Validation(_))
-        ));
+        assert!(
+            matches!(
+                preview_rule(rule, " value ".into()).await,
+                Err(AppError::Validation(_))
+            ),
+            "An invalid draft must be rejected before any preview transformation runs."
+        );
     }
 
     #[tokio::test]
     async fn preview_enforces_input_byte_boundary() -> Result<(), AppError> {
         let input = "é".repeat(MAX_TEXT_BYTES / 2);
-        assert_eq!(preview_rule(draft(), input.clone()).await?, input);
-        assert!(matches!(
-            preview_rule(draft(), input + "é").await,
-            Err(AppError::Validation(_))
-        ));
+        assert_eq!(
+            preview_rule(draft(), input.clone()).await?,
+            input,
+            "Preview must accept UTF-8 input exactly at the byte limit."
+        );
+        assert!(
+            matches!(
+                preview_rule(draft(), input + "é").await,
+                Err(AppError::Validation(_))
+            ),
+            "Adding one multibyte character beyond the input limit must produce a validation error."
+        );
         Ok(())
     }
 }

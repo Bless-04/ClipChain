@@ -41,6 +41,12 @@ impl From<sqlx::Error> for AppError {
     }
 }
 
+impl From<std::io::Error> for AppError {
+    fn from(error: std::io::Error) -> Self {
+        Self::Internal(error.to_string())
+    }
+}
+
 impl From<sqlx::migrate::MigrateError> for AppError {
     fn from(error: sqlx::migrate::MigrateError) -> Self {
         Self::Database(error.to_string())
@@ -64,36 +70,58 @@ mod tests {
     fn app_error_serializes_correctly() {
         let err = AppError::NotFound("rule 99".to_string());
         let json = serde_json::to_value(&err).expect("serialization must succeed in tests");
-        assert_eq!(json["kind"], "notFound");
-        assert_eq!(json["message"], "rule 99");
+        assert_eq!(
+            json["kind"], "notFound",
+            "Missing rules must serialize with the notFound error kind expected by clients."
+        );
+        assert_eq!(
+            json["message"], "rule 99",
+            "A serialized missing-rule error must retain the specific rule identifier."
+        );
     }
 
     #[test]
     fn validation_error_serializes_correctly() {
         let err = AppError::Validation("bad pattern".to_string());
         let json = serde_json::to_value(&err).expect("serialization must succeed in tests");
-        assert_eq!(json["kind"], "validation");
-        assert_eq!(json["message"], "bad pattern");
+        assert_eq!(
+            json["kind"], "validation",
+            "Invalid input must serialize with the validation error kind."
+        );
+        assert_eq!(
+            json["message"], "bad pattern",
+            "A serialized validation error must retain its useful explanation."
+        );
     }
 
     #[test]
     fn database_error_serializes_correctly() {
         let err = AppError::Database("connection refused".to_string());
         let json = serde_json::to_value(&err).expect("serialization must succeed in tests");
-        assert_eq!(json["kind"], "database");
+        assert_eq!(
+            json["kind"], "database",
+            "Database failures must serialize with a distinct database error kind."
+        );
     }
 
     #[test]
-    fn clipboard_and_internal_errors_round_trip_with_their_typed_messages(
-    ) -> Result<(), serde_json::Error> {
+    fn clipboard_and_internal_errors_round_trip_with_their_typed_messages()
+    -> Result<(), serde_json::Error> {
         for (error, kind) in [
             (AppError::Clipboard("Clipboard locked".into()), "clipboard"),
             (AppError::Internal("Startup denied".into()), "internal"),
         ] {
             let json = serde_json::to_value(&error)?;
-            assert_eq!(json["kind"], kind);
+            assert_eq!(
+                json["kind"], kind,
+                "Clipboard and internal failures must keep their distinct error kinds: {kind}."
+            );
             let decoded: AppError = serde_json::from_value(json)?;
-            assert_eq!(decoded.to_string(), error.to_string());
+            assert_eq!(
+                decoded.to_string(),
+                error.to_string(),
+                "Serializing and reading an error back must preserve its human-readable explanation."
+            );
         }
         Ok(())
     }

@@ -71,19 +71,53 @@ mod tests {
 
     #[test]
     fn empty_rule_set_returns_input_unchanged() {
-        assert_eq!(run_pipeline(&[], "hello").unwrap(), "hello");
+        assert_eq!(
+            run_pipeline(&[], "hello").unwrap(),
+            "hello",
+            "A pipeline with no rules must return the original text unchanged."
+        );
+    }
+
+    #[test]
+    fn empty_and_disabled_pipelines_still_enforce_input_limit() {
+        let exact = "é".repeat(MAX_TEXT_BYTES / 2);
+        assert_eq!(
+            run_pipeline(&[], &exact).unwrap(),
+            exact,
+            "Even an empty pipeline must accept input exactly at the UTF-8 byte limit."
+        );
+        let excessive = exact + "é";
+        assert!(
+            matches!(run_pipeline(&[], &excessive), Err(AppError::Validation(_))),
+            "An empty pipeline must still reject input beyond the byte limit."
+        );
+        assert!(
+            matches!(
+                run_pipeline(&[trim(0, false)], &excessive),
+                Err(AppError::Validation(_))
+            ),
+            "Disabling every rule must not bypass the input size limit."
+        );
     }
 
     #[test]
     fn inactive_rules_are_skipped() {
         let rules = vec![trim(0, false)];
-        assert_eq!(run_pipeline(&rules, "  hello  ").unwrap(), "  hello  ");
+        assert_eq!(
+            run_pipeline(&rules, "  hello  ").unwrap(),
+            "  hello  ",
+            "Disabled rules must leave the input unchanged, including its whitespace."
+        );
     }
 
     #[test]
     fn single_trim_rule() {
         let rules = vec![trim(0, true)];
-        assert_eq!(run_pipeline(&rules, "  hello  ").unwrap(), "hello");
+        assert_eq!(
+            run_pipeline(&rules, "  hello  ").unwrap(),
+            "hello",
+            "An enabled trim rule must remove surrounding whitespace."
+        );
     }
 
     #[test]
@@ -93,7 +127,8 @@ mod tests {
         let rules = vec![replace(1, "world", "Rust"), trim(0, true)];
         assert_eq!(
             run_pipeline(&rules, "  hello world  ").unwrap(),
-            "hello Rust"
+            "hello Rust",
+            "Rules must execute by saved pipeline position, not by their order in the supplied list."
         );
     }
 
@@ -107,7 +142,8 @@ mod tests {
         let input = "  My secret is 12345  ";
         assert_eq!(
             run_pipeline(&rules, input).unwrap(),
-            "My [REDACTED] is [NUM]"
+            "My [REDACTED] is [NUM]",
+            "Each rule must receive the previous rule's output so trimming and both redactions are retained."
         );
     }
 
@@ -126,6 +162,9 @@ mod tests {
             replace(1, "foo", "bar"),
         ];
         let err = run_pipeline(&rules, "foo bar").unwrap_err();
-        assert!(matches!(err, AppError::Validation(_)));
+        assert!(
+            matches!(err, AppError::Validation(_)),
+            "The pipeline must return the first invalid-rule error instead of treating partial work as success."
+        );
     }
 }

@@ -34,20 +34,36 @@ mod tests {
     use super::AppSettings;
 
     #[test]
-    fn legacy_settings_default_recording_on_and_preserve_explicit_false(
-    ) -> Result<(), serde_json::Error> {
+    fn legacy_settings_default_recording_on_and_preserve_explicit_false()
+    -> Result<(), serde_json::Error> {
         let legacy: AppSettings =
             serde_json::from_str(r#"{"isActive":false,"launchAtStartup":true}"#)?;
-        assert!(legacy.record_history);
-        assert!(!legacy.is_active);
-        assert!(legacy.launch_at_startup);
+        assert!(
+            legacy.record_history,
+            "Older saved settings without recordHistory must default to recording enabled."
+        );
+        assert!(
+            !legacy.is_active,
+            "Reading older settings must preserve a paused monitor."
+        );
+        assert!(
+            legacy.launch_at_startup,
+            "Reading older settings must preserve the startup preference."
+        );
         let disabled = AppSettings {
             record_history: false,
             ..legacy
         };
         let json = serde_json::to_value(&disabled)?;
-        assert_eq!(json["recordHistory"], false);
-        assert_eq!(serde_json::from_value::<AppSettings>(json)?, disabled);
+        assert_eq!(
+            json["recordHistory"], false,
+            "An explicit false recording preference must be serialized, not replaced by the legacy default."
+        );
+        assert_eq!(
+            serde_json::from_value::<AppSettings>(json)?,
+            disabled,
+            "Saving and reading settings must preserve every field, including disabled recording."
+        );
         Ok(())
     }
 }

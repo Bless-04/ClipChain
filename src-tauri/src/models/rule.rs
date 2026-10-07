@@ -203,9 +203,18 @@ mod tests {
             trim_end: true,
         });
         let json = serde_json::to_value(&rule).expect("serialization must succeed in tests");
-        assert_eq!(json["type"], "trim");
-        assert!(json["data"].is_object());
-        assert_eq!(json["data"]["trimStart"], true);
+        assert_eq!(
+            json["type"], "trim",
+            "Serialized trim rules must identify their type so clients can choose the correct editor."
+        );
+        assert!(
+            json["data"].is_object(),
+            "Variant-specific rule fields must be nested in the data object."
+        );
+        assert_eq!(
+            json["data"]["trimStart"], true,
+            "Serialized trim fields must use the camelCase names expected by the frontend."
+        );
     }
 
     #[test]
@@ -220,8 +229,14 @@ mod tests {
             match_case: false,
         });
         let json = serde_json::to_value(&rule).expect("serialization must succeed in tests");
-        assert_eq!(json["type"], "replace");
-        assert_eq!(json["data"]["matchCase"], false);
+        assert_eq!(
+            json["type"], "replace",
+            "Serialized replacement rules must identify the replace variant."
+        );
+        assert_eq!(
+            json["data"]["matchCase"], false,
+            "A disabled case-matching option must be preserved under the matchCase JSON field."
+        );
     }
 
     #[test]
@@ -234,7 +249,14 @@ mod tests {
             pattern: r"\d{10}".to_string(),
             replacement: "[PHONE]".to_string(),
         });
-        assert_eq!(rule.order(), 5);
-        assert!(!rule.is_active());
+        assert_eq!(
+            rule.order(),
+            5,
+            "The shared rule accessor must return the stored pipeline position."
+        );
+        assert!(
+            !rule.is_active(),
+            "The shared rule accessor must preserve a disabled rule's state."
+        );
     }
 }

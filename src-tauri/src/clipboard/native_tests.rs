@@ -27,7 +27,10 @@ fn require_hosted_runner(
 
 #[test]
 fn native_clipboard_requires_explicit_disposable_runner() {
-    assert!(require_hosted_runner(Some("true"), Some("github-hosted"), Some("1")).is_ok());
+    assert!(
+        require_hosted_runner(Some("true"), Some("github-hosted"), Some("1")).is_ok(),
+        "The native clipboard smoke test may run only on an explicitly opted-in disposable hosted runner."
+    );
     for (actions, environment, opt_in) in [
         (None, Some("github-hosted"), Some("1")),
         (Some("false"), Some("github-hosted"), Some("1")),
@@ -36,7 +39,10 @@ fn native_clipboard_requires_explicit_disposable_runner() {
         (Some("true"), Some("github-hosted"), None),
         (Some("true"), Some("github-hosted"), Some("0")),
     ] {
-        assert!(require_hosted_runner(actions, environment, opt_in).is_err());
+        assert!(
+            require_hosted_runner(actions, environment, opt_in).is_err(),
+            "The native test must reject incomplete or unsafe runner settings: actions={actions:?}, environment={environment:?}, opt_in={opt_in:?}."
+        );
     }
 }
 
@@ -131,6 +137,9 @@ async fn pipeline_state(directory: &tempfile::TempDir) -> Result<AppState, AppEr
 // contents on an ephemeral CI desktop. The guard runs before any OS access.
 #[tokio::test]
 #[ignore = "Requires an explicitly opted-in GitHub-hosted desktop; use pnpm test:native in CI"]
+// Keep the guarded native lifecycle in one scenario so its ordered clipboard
+// steps and their failure explanations can be read together.
+#[allow(clippy::too_many_lines)]
 async fn native_clipboard_pipeline_smoke() -> TestResult {
     require_hosted_runner(
         std::env::var("GITHUB_ACTIONS").ok().as_deref(),
@@ -144,38 +153,62 @@ async fn native_clipboard_pipeline_smoke() -> TestResult {
     let mut device = arboard::Clipboard::new()?;
     let mut monitor = Monitor::default();
     write_external(&mut external, "baseline copy").await?;
-    assert!(tick_with_retry(&mut monitor, &mut device, &state)
-        .await?
-        .change
-        .is_none());
+    assert!(
+        tick_with_retry(&mut monitor, &mut device, &state)
+            .await?
+            .change
+            .is_none(),
+        "Starting a native monitor must not transform text already on the clipboard."
+    );
     assert_eq!(
         read_external(&mut external).await?.as_deref(),
-        Some("baseline copy")
+        Some("baseline copy"),
+        "The initial native clipboard contents must remain unchanged while establishing the starting point."
     );
 
     let original = " \tcafé 😀\ncopy 42 \n";
     let expected = "café 😀\ncopy! [42]";
     write_external(&mut external, original).await?;
     let tick = tick_with_retry(&mut monitor, &mut device, &state).await?;
-    assert!(tick.status.is_running);
-    assert!(tick.status.last_error.is_none());
+    assert!(
+        tick.status.is_running,
+        "A successful native clipboard poll must report a running monitor."
+    );
+    assert!(
+        tick.status.last_error.is_none(),
+        "A successful native transformation must not leave a worker error."
+    );
     let entry = tick
         .change
         .and_then(|change| change.entry)
         .ok_or("Expected recorded native transformation")?;
-    assert_eq!(entry.original_text, original);
-    assert_eq!(entry.transformed_text, expected);
+    assert_eq!(
+        entry.original_text, original,
+        "Native history must retain the original Unicode and multiline text exactly."
+    );
+    assert_eq!(
+        entry.transformed_text, expected,
+        "Native history must store the final Trim, Replace, and Regex output."
+    );
     assert_eq!(
         read_external(&mut external).await?.as_deref(),
-        Some(expected)
+        Some(expected),
+        "An independent clipboard handle must read the transformed text written by the monitor."
     );
     for _ in 0..3 {
-        assert!(tick_with_retry(&mut monitor, &mut device, &state)
-            .await?
-            .change
-            .is_none());
+        assert!(
+            tick_with_retry(&mut monitor, &mut device, &state)
+                .await?
+                .change
+                .is_none(),
+            "Later native polls must not treat the monitor's own write as a new copy."
+        );
     }
-    assert_eq!(db::history::get_all(&state.pool).await?.len(), 1);
+    assert_eq!(
+        db::history::get_all(&state.pool).await?.len(),
+        1,
+        "One external copy must create only one history entry even after repeated native polls."
+    );
 
     state
         .persist_settings(&AppSettings {
@@ -188,20 +221,26 @@ async fn native_clipboard_pipeline_smoke() -> TestResult {
         !tick_with_retry(&mut monitor, &mut device, &state)
             .await?
             .status
-            .is_running
+            .is_running,
+        "Pausing must make the native monitor report that it is stopped."
     );
     assert_eq!(
         read_external(&mut external).await?.as_deref(),
-        Some("paused copy")
+        Some("paused copy"),
+        "Text copied while paused must remain unchanged."
     );
     state.persist_settings(&AppSettings::default()).await?;
-    assert!(tick_with_retry(&mut monitor, &mut device, &state)
-        .await?
-        .change
-        .is_none());
+    assert!(
+        tick_with_retry(&mut monitor, &mut device, &state)
+            .await?
+            .change
+            .is_none(),
+        "Resuming must establish a fresh starting point without transforming the paused copy."
+    );
     assert_eq!(
         read_external(&mut external).await?.as_deref(),
-        Some("paused copy")
+        Some("paused copy"),
+        "The copy made during the pause must survive the first poll after resuming."
     );
 
     state
@@ -212,16 +251,34 @@ async fn native_clipboard_pipeline_smoke() -> TestResult {
         .await?;
     write_external(&mut external, "  next copy 7  ").await?;
     let tick = tick_with_retry(&mut monitor, &mut device, &state).await?;
-    assert!(tick.change.is_some_and(|change| change.entry.is_none()));
+    assert!(
+        tick.change.is_some_and(|change| change.entry.is_none()),
+        "With recording disabled, native processing must report a change without a history entry."
+    );
     assert_eq!(
         read_external(&mut external).await?.as_deref(),
-        Some("next copy! [7]")
+        Some("next copy! [7]"),
+        "Native transformations must continue after history recording is disabled."
     );
-    assert_eq!(db::history::get_all(&state.pool).await?.len(), 1);
+    assert_eq!(
+        db::history::get_all(&state.pool).await?.len(),
+        1,
+        "Disabling recording must preserve old history without adding new entries."
+    );
     db::history::clear(&state.pool).await?;
-    assert!(db::history::get_all(&state.pool).await?.is_empty());
-    assert_eq!(db::rules::get_all(&state.pool).await?.len(), 4);
-    assert!(!db::settings::get(&state.pool).await?.record_history);
+    assert!(
+        db::history::get_all(&state.pool).await?.is_empty(),
+        "Clearing native test history must remove all retained entries."
+    );
+    assert_eq!(
+        db::rules::get_all(&state.pool).await?.len(),
+        4,
+        "Clearing history must preserve all four saved pipeline rules."
+    );
+    assert!(
+        !db::settings::get(&state.pool).await?.record_history,
+        "Clearing history must not re-enable recording."
+    );
     state.pool.close().await;
     Ok(())
 }

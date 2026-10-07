@@ -284,38 +284,62 @@ mod tests {
     #[test]
     fn trim_both_empty_string() {
         let rule = trim_rule(true, true);
-        assert_eq!(rule.transform("").unwrap(), "");
+        assert_eq!(
+            rule.transform("").unwrap(),
+            "",
+            "Trimming an empty string must return an empty string."
+        );
     }
 
     #[test]
     fn trim_both_no_whitespace() {
         let rule = trim_rule(true, true);
-        assert_eq!(rule.transform("hello").unwrap(), "hello");
+        assert_eq!(
+            rule.transform("hello").unwrap(),
+            "hello",
+            "Trimming must leave text without surrounding whitespace unchanged."
+        );
     }
 
     #[test]
     fn trim_both_leading_and_trailing() {
         let rule = trim_rule(true, true);
-        assert_eq!(rule.transform("  hello world  ").unwrap(), "hello world");
+        assert_eq!(
+            rule.transform("  hello world  ").unwrap(),
+            "hello world",
+            "Trimming both ends must preserve spaces inside the text."
+        );
     }
 
     #[test]
     fn trim_start_only() {
         let rule = trim_rule(true, false);
-        assert_eq!(rule.transform("  hello  ").unwrap(), "hello  ");
+        assert_eq!(
+            rule.transform("  hello  ").unwrap(),
+            "hello  ",
+            "Start-only trimming must preserve trailing whitespace."
+        );
     }
 
     #[test]
     fn trim_end_only() {
         let rule = trim_rule(false, true);
-        assert_eq!(rule.transform("  hello  ").unwrap(), "  hello");
+        assert_eq!(
+            rule.transform("  hello  ").unwrap(),
+            "  hello",
+            "End-only trimming must preserve leading whitespace."
+        );
     }
 
     #[test]
     fn trim_neither_flag_passthrough() {
         let rule = trim_rule(false, false);
         let input = "  no change  ";
-        assert_eq!(rule.transform(input).unwrap(), input);
+        assert_eq!(
+            rule.transform(input).unwrap(),
+            input,
+            "Disabling both trim options must preserve the entire input."
+        );
     }
 
     #[test]
@@ -323,14 +347,19 @@ mod tests {
         let rule = trim_rule(true, true);
         assert_eq!(
             rule.transform("\n  hello\n  world\n").unwrap(),
-            "hello\n  world"
+            "hello\n  world",
+            "Trimming multiline text must remove outer whitespace while preserving internal line breaks and indentation."
         );
     }
 
     #[test]
     fn trim_only_whitespace_becomes_empty() {
         let rule = trim_rule(true, true);
-        assert_eq!(rule.transform("   \t\n   ").unwrap(), "");
+        assert_eq!(
+            rule.transform("   \t\n   ").unwrap(),
+            "",
+            "An input consisting only of whitespace must trim to an empty string."
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -340,25 +369,41 @@ mod tests {
     #[test]
     fn replace_empty_input() {
         let rule = replace_rule("foo", "bar", true);
-        assert_eq!(rule.transform("").unwrap(), "");
+        assert_eq!(
+            rule.transform("").unwrap(),
+            "",
+            "Literal replacement on empty input must return empty output."
+        );
     }
 
     #[test]
     fn replace_unmatched_passthrough() {
         let rule = replace_rule("xyz", "bar", true);
-        assert_eq!(rule.transform("hello world").unwrap(), "hello world");
+        assert_eq!(
+            rule.transform("hello world").unwrap(),
+            "hello world",
+            "A literal rule with no match must return the input unchanged."
+        );
     }
 
     #[test]
     fn replace_single_match_case_sensitive() {
         let rule = replace_rule("world", "Rust", true);
-        assert_eq!(rule.transform("hello world").unwrap(), "hello Rust");
+        assert_eq!(
+            rule.transform("hello world").unwrap(),
+            "hello Rust",
+            "A matching literal target must be replaced with the configured text."
+        );
     }
 
     #[test]
     fn replace_multiple_matches() {
         let rule = replace_rule("a", "X", true);
-        assert_eq!(rule.transform("banana").unwrap(), "bXnXnX");
+        assert_eq!(
+            rule.transform("banana").unwrap(),
+            "bXnXnX",
+            "Literal replacement must replace every non-overlapping match."
+        );
     }
 
     #[test]
@@ -366,7 +411,8 @@ mod tests {
         let rule = replace_rule("HELLO", "[REDACTED]", false);
         assert_eq!(
             rule.transform("hello world Hello HELLO").unwrap(),
-            "[REDACTED] world [REDACTED] [REDACTED]"
+            "[REDACTED] world [REDACTED] [REDACTED]",
+            "Case-insensitive replacement must match lowercase, title case, and uppercase copies."
         );
     }
 
@@ -376,7 +422,8 @@ mod tests {
         // "Baz" is untouched; only "FOO" / "foo" are replaced.
         assert_eq!(
             rule.transform("Baz FOO foo Baz").unwrap(),
-            "Baz bar bar Baz"
+            "Baz bar bar Baz",
+            "Case-insensitive matching must preserve the original casing of text outside matches."
         );
     }
 
@@ -384,13 +431,20 @@ mod tests {
     fn replace_empty_target_returns_validation_error() {
         let rule = replace_rule("", "bar", true);
         let err = rule.transform("some text").unwrap_err();
-        assert!(matches!(err, AppError::Validation(_)));
+        assert!(
+            matches!(err, AppError::Validation(_)),
+            "An empty literal target must be rejected instead of matching between every character."
+        );
     }
 
     #[test]
     fn replace_unicode_target() {
         let rule = replace_rule("café", "coffee", true);
-        assert_eq!(rule.transform("I love café").unwrap(), "I love coffee");
+        assert_eq!(
+            rule.transform("I love café").unwrap(),
+            "I love coffee",
+            "Literal replacement must correctly match a target containing accented characters."
+        );
     }
 
     #[test]
@@ -399,14 +453,25 @@ mod tests {
         // German sharp-S — lowercasing behavior depends on locale; test pass-through at minimum.
         let result = rule.transform("Straße").unwrap();
         // Either replaced or passed through — must not panic.
-        assert!(!result.is_empty());
+        assert_ne!(
+            result, "",
+            "Case-insensitive Unicode processing must not discard the entire nonempty input."
+        );
     }
 
     #[test]
     fn insensitive_empty_and_short_input_are_safe() {
         let rule = replace_rule("long needle", "X", false);
-        assert_eq!(rule.transform("").unwrap(), "");
-        assert_eq!(rule.transform("a").unwrap(), "a");
+        assert_eq!(
+            rule.transform("").unwrap(),
+            "",
+            "Case-insensitive matching must safely handle empty input."
+        );
+        assert_eq!(
+            rule.transform("a").unwrap(),
+            "a",
+            "Input shorter than the target must remain unchanged."
+        );
     }
 
     #[test]
@@ -415,32 +480,45 @@ mod tests {
             replace_rule("i\u{307}", "X", false)
                 .transform("AİB")
                 .unwrap(),
-            "AXB"
+            "AXB",
+            "A full lowercase expansion of the dotted capital I must replace the original character once."
         );
         assert_eq!(
             replace_rule("k", "X", false)
                 .transform("\u{212a} K k")
                 .unwrap(),
-            "X X X"
+            "X X X",
+            "The Kelvin sign and ordinary K characters must share their Unicode lowercase match."
         );
         assert_eq!(
             replace_rule("i", "X", false).transform("İ i").unwrap(),
-            "İ X"
+            "İ X",
+            "A partial lowercase expansion must not replace only part of an original Unicode character."
         );
         assert_eq!(
             replace_rule("café", "X", false)
                 .transform("CAFÉ 😀 café")
                 .unwrap(),
-            "X 😀 X"
+            "X 😀 X",
+            "Accented matches must be replaced while keeping the emoji between them intact."
         );
     }
 
     #[test]
     fn expanding_replacements_stop_at_the_output_limit() {
         let input = "a".repeat(MAX_TEXT_BYTES);
-        assert!(replace_rule("a", "aaaa", true).transform(&input).is_err());
-        assert!(replace_rule("a", "aaaa", false).transform(&input).is_err());
-        assert!(regex_rule("(a+)", "$1$1").transform(&input).is_err());
+        assert!(
+            replace_rule("a", "aaaa", true).transform(&input).is_err(),
+            "Case-sensitive replacement must stop when expansion would exceed the output byte limit."
+        );
+        assert!(
+            replace_rule("a", "aaaa", false).transform(&input).is_err(),
+            "Case-insensitive replacement must enforce the same output byte limit."
+        );
+        assert!(
+            regex_rule("(a+)", "$1$1").transform(&input).is_err(),
+            "Regex capture expansion must stop before exceeding the output byte limit."
+        );
     }
 
     #[test]
@@ -466,7 +544,8 @@ mod tests {
                 regex_rule(pattern, replacement)
                     .transform("hello world")
                     .unwrap(),
-                reference.replace_all("hello world", replacement)
+                reference.replace_all("hello world", replacement),
+                "Bounded replacement must follow the regex library's capture rules; pattern={pattern:?}, replacement={replacement:?}."
             );
         }
     }
@@ -478,19 +557,31 @@ mod tests {
     #[test]
     fn regex_empty_input() {
         let rule = regex_rule(r"\d+", "[NUM]");
-        assert_eq!(rule.transform("").unwrap(), "");
+        assert_eq!(
+            rule.transform("").unwrap(),
+            "",
+            "A regex with no match in empty input must return an empty string."
+        );
     }
 
     #[test]
     fn regex_unmatched_passthrough() {
         let rule = regex_rule(r"\d+", "[NUM]");
-        assert_eq!(rule.transform("no digits here").unwrap(), "no digits here");
+        assert_eq!(
+            rule.transform("no digits here").unwrap(),
+            "no digits here",
+            "A regex with no matching digits must preserve the input."
+        );
     }
 
     #[test]
     fn regex_single_match() {
         let rule = regex_rule(r"\d+", "[NUM]");
-        assert_eq!(rule.transform("order 42").unwrap(), "order [NUM]");
+        assert_eq!(
+            rule.transform("order 42").unwrap(),
+            "order [NUM]",
+            "A matching digit sequence must be replaced as one regex match."
+        );
     }
 
     #[test]
@@ -498,7 +589,8 @@ mod tests {
         let rule = regex_rule(r"\d+", "[NUM]");
         assert_eq!(
             rule.transform("1 apple, 2 bananas, 300 grapes").unwrap(),
-            "[NUM] apple, [NUM] bananas, [NUM] grapes"
+            "[NUM] apple, [NUM] bananas, [NUM] grapes",
+            "Regex replacement must replace every matching digit sequence."
         );
     }
 
@@ -506,7 +598,11 @@ mod tests {
     fn regex_capture_group_replacement() {
         // Swap first and last name using capture groups.
         let rule = regex_rule(r"(\w+)\s+(\w+)", "$2 $1");
-        assert_eq!(rule.transform("John Doe").unwrap(), "Doe John");
+        assert_eq!(
+            rule.transform("John Doe").unwrap(),
+            "Doe John",
+            "Numbered capture references must substitute the captured words in the requested order."
+        );
     }
 
     #[test]
@@ -514,7 +610,8 @@ mod tests {
         let rule = regex_rule(r"\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b", "[PHONE]");
         assert_eq!(
             rule.transform("Call 555-867-5309 now").unwrap(),
-            "Call [PHONE] now"
+            "Call [PHONE] now",
+            "The phone regex must redact the number while preserving surrounding text."
         );
     }
 
@@ -522,7 +619,10 @@ mod tests {
     fn regex_malformed_pattern_returns_validation_error() {
         let rule = regex_rule(r"(unclosed", "[X]");
         let err = rule.transform("test").unwrap_err();
-        assert!(matches!(err, AppError::Validation(_)));
+        assert!(
+            matches!(err, AppError::Validation(_)),
+            "A malformed regex must return a validation error instead of panicking."
+        );
     }
 
     #[test]
@@ -531,7 +631,10 @@ mod tests {
         let rule = regex_rule(r"(?m)^\s+", "");
         let input = "  line one\n  line two";
         let output = rule.transform(input).unwrap();
-        assert_eq!(output, "line one\nline two");
+        assert_eq!(
+            output, "line one\nline two",
+            "Inline multiline flags must apply start-of-line matching to every input line."
+        );
     }
 
     #[test]
@@ -540,6 +643,9 @@ mod tests {
         let rule = regex_rule(r"", "X");
         // Result is implementation-defined but must not panic or return an error.
         let result = rule.transform("ab");
-        assert!(result.is_ok());
+        assert!(
+            result.is_ok(),
+            "An empty regex pattern is valid and must be allowed to match between characters."
+        );
     }
 }

@@ -20,9 +20,20 @@ async fn startup_enable_and_disable_persist_all_settings() -> TestResult {
             Ok(())
         })
         .await?;
-        assert_eq!(*changes.borrow(), vec![!previous]);
-        assert_eq!(db::settings::get(&state.pool).await?, settings);
-        assert!(state.reset_baseline.load(Ordering::Relaxed));
+        assert_eq!(
+            *changes.borrow(),
+            vec![!previous],
+            "Changing the startup preference must call the OS operation once with the new value; previous value: {previous}."
+        );
+        assert_eq!(
+            db::settings::get(&state.pool).await?,
+            settings,
+            "A successful startup change must persist every requested setting."
+        );
+        assert!(
+            state.reset_baseline.load(Ordering::Relaxed),
+            "Pausing through settings must reset the clipboard starting point before a later resume."
+        );
         state.pool.close().await;
     }
     Ok(())
@@ -42,8 +53,15 @@ async fn unchanged_startup_registration_is_not_touched() -> TestResult {
             Err("Startup must not be touched".into())
         })
         .await?;
-        assert_eq!(db::settings::get(&state.pool).await?, settings);
-        assert!(!state.reset_baseline.load(Ordering::Relaxed));
+        assert_eq!(
+            db::settings::get(&state.pool).await?,
+            settings,
+            "Other settings must still save when startup registration is unchanged."
+        );
+        assert!(
+            !state.reset_baseline.load(Ordering::Relaxed),
+            "Changing recording alone must not reset the clipboard starting point."
+        );
         state.pool.close().await;
     }
     Ok(())
@@ -65,14 +83,23 @@ async fn startup_failure_preserves_saved_settings_and_pause_baseline() -> TestRe
     })
     .await;
     assert!(
-        matches!(result, Err(AppError::Internal(message)) if message.contains("Could not change startup registration") && message.contains("Registration denied"))
+        matches!(result, Err(AppError::Internal(message)) if message.contains("Could not change startup registration") && message.contains("Registration denied")),
+        "A rejected OS startup change must explain both the failed operation and the OS error."
     );
-    assert_eq!(*changes.borrow(), vec![true]);
+    assert_eq!(
+        *changes.borrow(),
+        vec![true],
+        "A rejected startup change must not trigger extra registration attempts."
+    );
     assert_eq!(
         db::settings::get(&state.pool).await?,
-        AppSettings::default()
+        AppSettings::default(),
+        "If startup registration fails, all saved settings must remain at their previous values."
     );
-    assert!(!state.reset_baseline.load(Ordering::Relaxed));
+    assert!(
+        !state.reset_baseline.load(Ordering::Relaxed),
+        "A rejected settings change must not reset the monitor's starting point."
+    );
     state.pool.close().await;
     Ok(())
 }
@@ -94,9 +121,19 @@ async fn database_failure_restores_previous_startup_registration() -> TestResult
             Ok(())
         })
         .await;
-        assert!(matches!(result, Err(AppError::Database(_))));
-        assert_eq!(*changes.borrow(), vec![!previous, previous]);
-        assert!(!state.reset_baseline.load(Ordering::Relaxed));
+        assert!(
+            matches!(result, Err(AppError::Database(_))),
+            "A failed settings save must still report the database error after restoring OS registration."
+        );
+        assert_eq!(
+            *changes.borrow(),
+            vec![!previous, previous],
+            "If saving settings fails, restore the prior OS startup value; previous value: {previous}."
+        );
+        assert!(
+            !state.reset_baseline.load(Ordering::Relaxed),
+            "Settings that failed to save must not reset the monitor's starting point."
+        );
     }
     Ok(())
 }
@@ -121,9 +158,14 @@ async fn rollback_failure_reports_both_failures() -> TestResult {
     })
     .await;
     assert!(
-        matches!(result, Err(AppError::Internal(message)) if message.contains("Database error") && message.contains("startup rollback also failed") && message.contains("Rollback denied"))
+        matches!(result, Err(AppError::Internal(message)) if message.contains("Database error") && message.contains("startup rollback also failed") && message.contains("Rollback denied")),
+        "If saving and restoring startup both fail, the error must explain both failures."
     );
-    assert_eq!(*changes.borrow(), vec![true, false]);
+    assert_eq!(
+        *changes.borrow(),
+        vec![true, false],
+        "A rollback failure must still show that restoring the previous startup value was attempted."
+    );
     Ok(())
 }
 
@@ -138,7 +180,13 @@ async fn database_failure_without_startup_change_does_not_attempt_rollback() -> 
         Ok(())
     })
     .await;
-    assert!(matches!(result, Err(AppError::Database(_))));
-    assert!(changes.borrow().is_empty());
+    assert!(
+        matches!(result, Err(AppError::Database(_))),
+        "A database failure must be reported even when no startup change was needed."
+    );
+    assert!(
+        changes.borrow().is_empty(),
+        "Do not attempt OS rollback when this operation never changed startup registration."
+    );
     Ok(())
 }
