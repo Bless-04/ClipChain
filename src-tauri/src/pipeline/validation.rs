@@ -70,27 +70,36 @@ mod tests {
         for id in [0, validation::MAX_SAFE_ID] {
             let mut rule = trim("Valid");
             rule.set_identity(id, 0);
-            assert!(validate_rule(&rule).is_ok());
+            assert!(
+                validate_rule(&rule).is_ok(),
+                "New-rule ID zero and the largest JavaScript-safe ID must be accepted; ID={id}."
+            );
         }
         for (id, order) in [(-1, 0), (validation::MAX_SAFE_ID + 1, 0), (0, -1)] {
             let mut rule = trim("Invalid");
             rule.set_identity(id, order);
-            assert!(matches!(validate_rule(&rule), Err(AppError::Validation(_))));
+            assert!(
+                matches!(validate_rule(&rule), Err(AppError::Validation(_))),
+                "Negative IDs, IDs beyond JavaScript's safe integer range, and negative positions must be rejected; ID={id}, position={order}."
+            );
         }
     }
 
     #[test]
     fn names_use_unicode_character_limits_and_reject_whitespace_only() {
-        assert!(validate_rule(&trim(&"😀".repeat(validation::MAX_NAME_CHARS))).is_ok());
+        assert!(
+            validate_rule(&trim(&"😀".repeat(validation::MAX_NAME_CHARS))).is_ok(),
+            "Rule-name length must count Unicode characters rather than UTF-8 bytes."
+        );
         for name in [
             String::new(),
             " \t\n\u{2003}".into(),
             "😀".repeat(validation::MAX_NAME_CHARS + 1),
         ] {
-            assert!(matches!(
-                validate_rule(&trim(&name)),
-                Err(AppError::Validation(_))
-            ));
+            assert!(
+                matches!(validate_rule(&trim(&name)), Err(AppError::Validation(_))),
+                "Blank or overlong rule names must be rejected; tested name={name:?}."
+            );
         }
     }
 
@@ -105,26 +114,41 @@ mod tests {
             replacement: String::new(),
             match_case: false,
         };
-        assert!(validate_rule(&Rule::Replace(rule.clone())).is_ok());
+        assert!(
+            validate_rule(&Rule::Replace(rule.clone())).is_ok(),
+            "A target at the UTF-8 byte limit and an empty replacement for deletion must be valid."
+        );
         rule.target.push('é');
-        assert!(matches!(
-            validate_rule(&Rule::Replace(rule.clone())),
-            Err(AppError::Validation(_))
-        ));
+        assert!(
+            matches!(
+                validate_rule(&Rule::Replace(rule.clone())),
+                Err(AppError::Validation(_))
+            ),
+            "A multibyte target exceeding the field byte limit must be rejected."
+        );
         rule.target = "x".into();
         rule.replacement = "é".repeat(validation::MAX_FIELD_BYTES / 2);
-        assert!(validate_rule(&Rule::Replace(rule.clone())).is_ok());
+        assert!(
+            validate_rule(&Rule::Replace(rule.clone())).is_ok(),
+            "A replacement exactly at the UTF-8 byte limit must be valid."
+        );
         rule.replacement.push('é');
-        assert!(matches!(
-            validate_rule(&Rule::Replace(rule.clone())),
-            Err(AppError::Validation(_))
-        ));
+        assert!(
+            matches!(
+                validate_rule(&Rule::Replace(rule.clone())),
+                Err(AppError::Validation(_))
+            ),
+            "A multibyte replacement exceeding the field byte limit must be rejected."
+        );
         rule.target.clear();
         rule.replacement.clear();
-        assert!(matches!(
-            validate_rule(&Rule::Replace(rule)),
-            Err(AppError::Validation(_))
-        ));
+        assert!(
+            matches!(
+                validate_rule(&Rule::Replace(rule)),
+                Err(AppError::Validation(_))
+            ),
+            "Literal replacement requires a nonempty target even when the replacement is empty."
+        );
     }
 
     #[test]
@@ -137,22 +161,34 @@ mod tests {
             pattern: String::new(),
             replacement: "é".repeat(validation::MAX_FIELD_BYTES / 2),
         };
-        assert!(validate_rule(&Rule::Regex(rule.clone())).is_ok());
+        assert!(
+            validate_rule(&Rule::Regex(rule.clone())).is_ok(),
+            "An empty regex and replacement at the byte limit must be valid even for a disabled rule."
+        );
         rule.replacement.push('é');
-        assert!(matches!(
-            validate_rule(&Rule::Regex(rule.clone())),
-            Err(AppError::Validation(_))
-        ));
+        assert!(
+            matches!(
+                validate_rule(&Rule::Regex(rule.clone())),
+                Err(AppError::Validation(_))
+            ),
+            "Disabled regex rules must still enforce the replacement byte limit."
+        );
         rule.replacement.clear();
         rule.pattern = "a".repeat(validation::MAX_FIELD_BYTES + 1);
-        assert!(matches!(
-            validate_rule(&Rule::Regex(rule.clone())),
-            Err(AppError::Validation(_))
-        ));
+        assert!(
+            matches!(
+                validate_rule(&Rule::Regex(rule.clone())),
+                Err(AppError::Validation(_))
+            ),
+            "Disabled regex rules must still enforce the pattern byte limit."
+        );
         rule.pattern = "(?=unsupported)".into();
-        assert!(matches!(
-            validate_rule(&Rule::Regex(rule)),
-            Err(AppError::Validation(_))
-        ));
+        assert!(
+            matches!(
+                validate_rule(&Rule::Regex(rule)),
+                Err(AppError::Validation(_))
+            ),
+            "Regex syntax unsupported by the Rust engine must be rejected even for disabled rules."
+        );
     }
 }
