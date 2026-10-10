@@ -4,8 +4,8 @@ use crate::{
     db,
     error::AppError,
     models::{
-        events::{MonitorStatus, SettingsUpdated},
         AppSettings,
+        events::{MonitorStatus, SettingsUpdated},
     },
     state::AppState,
 };
@@ -79,12 +79,12 @@ async fn persist_with_startup(
         })?;
     }
     if let Err(error) = state.persist_settings(settings).await {
-        if previous != settings.launch_at_startup {
-            if let Err(rollback_error) = set_startup(previous) {
-                return Err(AppError::Internal(format!(
-                    "{error}; startup rollback also failed: {rollback_error}"
-                )));
-            }
+        if previous != settings.launch_at_startup
+            && let Err(rollback_error) = set_startup(previous)
+        {
+            return Err(AppError::Internal(format!(
+                "{error}; startup rollback also failed: {rollback_error}"
+            )));
         }
         return Err(error);
     }
