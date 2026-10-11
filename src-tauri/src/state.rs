@@ -3,7 +3,7 @@
 use crate::{
     db,
     error::AppError,
-    models::{events::MonitorStatus, AppSettings},
+    models::{AppSettings, events::MonitorStatus},
 };
 use sqlx::SqlitePool;
 use std::sync::atomic::{AtomicBool, Ordering};
