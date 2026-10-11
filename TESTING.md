@@ -35,6 +35,9 @@ or startup registration.
 | Settings toggles, complete saves, canonical readback, initial-load recovery, browser controls | `src/lib/components/components.test.ts`; `src/lib/components/panels.test.ts` |
 | Navigation destinations/current route, browser notice, visible reconnect, layout disposal, modal cancel/busy behavior and opener focus | `src/routes/layout.test.ts`; `src/routes/rules/rules-page.test.ts`; `src/lib/components/panels.test.ts` |
 | Real OS clipboard with saved rules, Unicode/multiline text, ordered chaining, disabled rules, own-write suppression, pause/resume, disabled history, isolated clearing | `src-tauri/src/clipboard/native_tests.rs` (explicit full CI only) |
+| CLI argument/stdin transforms, draft previews, dry-run reports, UTF-8 and byte limits, rule/history/settings management, confirmations, process ownership | `src-tauri/tests/cli.rs` (executes the real console binary against temporary databases) |
+| Public CLI command names, flags, defaults, global database placement, positional cardinality, root/group/leaf help, exit/stream conventions, offline extraction, and destructive confirmations | `src-tauri/tests/cli_usage.rs` (literal parser fixtures and real console commands; no desktop or clipboard worker) |
+| One-shot writes and history, peer pause/resume, shutdown, worker events, owner health and lease release | `src-tauri/src/clipboard/tests.rs`; `src-tauri/src/clipboard/ownership.rs` (mock devices and temporary locks) |
 
 ## CI workflows
 
@@ -75,11 +78,29 @@ setting.
 
 ## Future changes
 
+The CLI usage fixtures in `src-tauri/tests/cli_usage.rs` pin the published syntax
+independently of Clap's command definitions. Keep their literal command names,
+option spellings, and expectations when adding commands. An intentional breaking
+change needs a compatibility decision and migration/deprecation notes; retain and
+test old spellings when supplying aliases. Help checks normalize ANSI escapes,
+whitespace, and Windows' executable suffix without snapshotting incidental prose
+or version numbers. Native `clip`/`daemon` operations are only parsed or asked for
+help in this suite. It runs automatically in `cargo test --locked`,
+`pnpm test:all`, and the existing full cross-platform CI workflow.
+
 Every feature addition or behavior change should include a regression at the
 layer that owns the behavior. Cover its normal use and a meaningful failure or
 boundary case. For bug fixes, reproduce the observed failure in a test before
 fixing it. Test observable outputs, confirmed state, and user interactions;
 avoid snapshots of incidental markup or assertions on private implementation.
+
+Give assertions a plain-language failure message that explains the expected
+behavior and why it matters. In Rust, use the message arguments to `assert!`,
+`assert_eq!`, or `assert_ne!`; in Vitest, use `expect(actual, message)`. For
+multi-step tests, identify the step (for example, a failed save or the first poll
+after resuming). For table-driven cases, include the relevant arguments or case
+values. Keep the normal expected/actual comparison output and avoid messages
+that merely repeat the expression or say "test failed".
 
 For a new rule, add transformation, validation, persistence, preview, pipeline,
 and editor interaction cases. For an IPC or setting change, regenerate bindings
@@ -97,7 +118,7 @@ can reorder constants.
 
 Regular feature regressions use simulated clipboard devices; the full CI smoke
 adds real clipboard adapter checks on hosted desktops. This does not establish
-complete desktop UI integration or webview layout. The [handoff](HANDOFF_PROMPT.md) tracks native observations and
+complete desktop UI integration or webview layout. The local [handoff](gitignore/HANDOFF_PROMPT.md) tracks native observations and
 remaining acceptance work. These checks still require a disposable application
 identity and synthetic fixtures:
 
