@@ -4,7 +4,10 @@
 //! Business logic for *what* each rule does lives in [`super::transformer`].
 //! This module only concerns itself with *ordering* and *filtering*.
 
-use crate::{error::AppError, models::Rule, pipeline::transformer::apply_rule};
+use crate::{
+    constants::clipboard::MAX_TEXT_BYTES, error::AppError, models::Rule,
+    pipeline::transformer::apply_rule,
+};
 
 /// Runs every **active** rule in `rules` against `input` in ascending `order`.
 ///
@@ -16,6 +19,9 @@ use crate::{error::AppError, models::Rule, pipeline::transformer::apply_rule};
 /// Returns the first [`AppError`] encountered. The pipeline is aborted at that
 /// point; partial transformations are discarded.
 pub fn run_pipeline(rules: &[Rule], input: &str) -> Result<String, AppError> {
+    if input.len() > MAX_TEXT_BYTES {
+        return Err(AppError::Validation("Input exceeds the 1 MiB limit".into()));
+    }
     // Collect active rules and sort by order ascending.
     // We sort a Vec of references to avoid cloning the Rule data.
     let mut active: Vec<&Rule> = rules.iter().filter(|r| r.is_active()).collect();
