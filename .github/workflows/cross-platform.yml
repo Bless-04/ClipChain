@@ -1,81 +1,96 @@
 name: Cross-platform checks
 
 on:
-  pull_request:
-  workflow_dispatch:
+    pull_request:
+        branches:
+            - master
+            - dev
+            - stable
+
+    workflow_dispatch:
 
 permissions:
-  contents: read
+    contents: read
 
 concurrency:
-  group: full-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+    group: full-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: true
 
 jobs:
-  desktop:
-    name: Full checks (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, macos-latest, ubuntu-24.04]
-    env:
-      CARGO_TERM_COLOR: always
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          package-manager-cache: false
-      - uses: pnpm/action-setup@v6
-        with:
-          standalone: true
-          cache: true
-      - name: Install Rust toolchain
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
-          rustup default stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
-          key: ${{ matrix.os }}
-      - name: Install Linux desktop dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y \
-            build-essential pkg-config libwebkit2gtk-4.1-dev libxdo-dev \
-            libssl-dev libayatana-appindicator3-dev librsvg2-dev \
-            xvfb xauth dbus-x11
-      - name: Install locked frontend dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Regenerate native bindings
-        run: cargo run --locked --bin generate_bindings --manifest-path src-tauri/Cargo.toml
-      - name: Check frontend types
-        run: pnpm check
-      - name: Lint frontend
-        run: pnpm lint
-      - name: Run frontend and Rust regressions
-        run: pnpm test:all
-      - name: Check Rust formatting
-        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
-      - name: Lint Rust
-        run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
-      - name: Exercise the native clipboard (Windows and macOS)
-        if: runner.os != 'Linux'
+    desktop:
+        name: Full checks (${{ matrix.os }})
+        runs-on: ${{ matrix.os }}
+        timeout-minutes: 45
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [windows-latest, macos-latest, ubuntu-24.04]
         env:
-          CLIPCHAIN_NATIVE_TESTS: '1'
-        run: pnpm test:native
-      - name: Exercise the native clipboard (Linux X11)
-        if: runner.os == 'Linux'
-        env:
-          CLIPCHAIN_NATIVE_TESTS: '1'
-        run: dbus-run-session -- xvfb-run -a pnpm test:native
-      - name: Build the native application
-        run: pnpm tauri build --debug --no-bundle --ci -- --locked
-      - name: Check whitespace
-        run: git diff --check
+            CARGO_TERM_COLOR: always
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 24
+                  package-manager-cache: false
+            - uses: pnpm/action-setup@v6
+              with:
+                  standalone: true
+                  cache: true
+            - name: Install Rust toolchain
+              shell: bash
+              run: |
+                  rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+                  rustup default stable
+            - uses: Swatinem/rust-cache@v2
+              with:
+                  workspaces: src-tauri -> target
+                  key: ${{ matrix.os }}
+            - name: Install Linux desktop dependencies
+              if: runner.os == 'Linux'
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install --no-install-recommends -y \
+                    build-essential pkg-config libwebkit2gtk-4.1-dev libxdo-dev \
+                    libssl-dev libayatana-appindicator3-dev librsvg2-dev \
+                    xvfb xauth dbus-x11
+            - name: Install locked frontend dependencies
+              run: pnpm install --frozen-lockfile
+            - name: Regenerate native bindings
+              run: cargo run --locked --bin generate_bindings --manifest-path src-tauri/Cargo.toml
+            - name: Check frontend types
+              run: pnpm check
+            - name: Lint frontend
+              run: pnpm lint
+            - name: Run frontend and Rust regressions
+              run: pnpm test:all
+            - name: Check Rust formatting
+              run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+            - name: Lint Rust
+              run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+            - name: Exercise the native clipboard (Windows and macOS)
+              if: runner.os != 'Linux'
+              env:
+                  CLIPCHAIN_NATIVE_TESTS: "1"
+              run: pnpm test:native
+            - name: Exercise the native clipboard (Linux X11)
+              if: runner.os == 'Linux'
+              env:
+                  CLIPCHAIN_NATIVE_TESTS: "1"
+              run: dbus-run-session -- xvfb-run -a pnpm test:native
+            - name: Exercise the native CLI lifecycle (Windows and macOS)
+              if: runner.os != 'Linux'
+              env:
+                  CLIPCHAIN_NATIVE_TESTS: "1"
+              run: pnpm test:native:cli
+            - name: Exercise the native CLI lifecycle (Linux X11)
+              if: runner.os == 'Linux'
+              env:
+                  CLIPCHAIN_NATIVE_TESTS: "1"
+              run: dbus-run-session -- xvfb-run -a pnpm test:native:cli
+            - name: Build the native application
+              run: pnpm tauri build --debug --no-bundle --ci -- --locked
+            - name: Check whitespace
+              run: git diff --check
