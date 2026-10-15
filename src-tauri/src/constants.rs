@@ -42,6 +42,8 @@ pub mod validation {
 
 /// Application identity needed by native window callbacks.
 pub mod app {
+    /// Application data identity shared by the desktop and CLI.
+    pub const IDENTIFIER: &str = "com.blessing.clipchain";
     /// Label of the application's main window.
     pub const MAIN_WINDOW: &str = "main";
 }
