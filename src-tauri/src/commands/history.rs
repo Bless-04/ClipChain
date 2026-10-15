@@ -3,7 +3,7 @@
 use crate::{
     db,
     error::AppError,
-    models::{events::HistoryCleared, HistoryEntry},
+    models::{HistoryEntry, events::HistoryCleared},
     state::AppState,
 };
 use std::sync::Arc;
